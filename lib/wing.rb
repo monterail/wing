@@ -10,17 +10,19 @@ module Wing
   SCRIPTS   = File.expand_path("../wing/scripts", __FILE__)
 
   def self.run(argv)
+    files = if argv.size > 1
+              argv.drop(1)
+            else
+              Dir.glob("**/*.md")
+            end
+
     case argv[0]
     when "init"
       init
+    when "html"
+      Generator.new(files).gen_html
     when "gen"
-      files = if argv.size > 1
-                argv.drop(1)
-              else
-                Dir.glob("**/*.md")
-              end
-
-      Generator.new(files).call
+      Generator.new(files).gen_pdf
     else
       help
     end
@@ -63,27 +65,30 @@ Usage: wing [init|gen] [OPTIONS] [FILES]
     end
 
 
-    def call
-      build
+    def gen_pdf
+      prepare
+      gen_html
+
+      # Convert to pdf
+      system "phantomjs #{phantom_script_path} file://#{@html_path} #{Shellwords.escape(title)}.pdf A4"
+      puts "#{title}.pdf generated"
     end
 
-    def build
+    def gen_html
+      # Write html to file
+      @html_path = File.expand_path(File.join("build", "page.html"))
+      File.open(@html_path, "w") {|f| f.write html }
+    end
+
+    def prepare
       # Prepare build dir
       FileUtils.rm_r "build" if File.exists?("build")
       FileUtils.mkdir_p "build"
 
       # Copy assets
       FileUtils.cp_r ASSETS, File.join("build", "assets")
-
-      # Write html to file
-      html_path = File.expand_path(File.join("build", "page.html"))
-      File.open(html_path, "w") {|f| f.write html }
-
-      # Convert to pdf
-      system "phantomjs #{phantom_script_path} file://#{html_path} #{Shellwords.escape(title)}.pdf A4"
-
-      puts "#{title}.pdf generated"
     end
+
 
     def phantom_script_path
       File.join(SCRIPTS, "rasterize.js")
