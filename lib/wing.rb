@@ -1,5 +1,129 @@
 require "wing/version"
 
+require "fileutils"
+require "yaml"
+require "shellwords"
+
 module Wing
-  # Your code goes here...
+  TEMPLATES = File.expand_path("../wing/templates", __FILE__)
+  ASSETS    = File.expand_path("../wing/assets", __FILE__)
+  SCRIPTS   = File.expand_path("../wing/scripts", __FILE__)
+
+  def self.run(argv)
+    case argv[0]
+    when "init"
+      init
+    when "gen"
+      files = if argv.size > 1
+                argv.drop(1)
+              else
+                Dir.glob("**/*.md")
+              end
+
+      Generator.new(files).call
+    else
+      help
+    end
+  end
+
+  def self.help
+    puts <<-EOS
+Usage: wing [init|gen] [OPTIONS] [FILES]
+    EOS
+  end
+
+  def self.init
+    FileUtils.cp File.join(TEMPLATES, "config.yml"), "config.yml"
+    FileUtils.cp File.join(TEMPLATES, "gitignore"), ".gitignore"
+  end
+
+  class Config < Struct.new(:title, :author, :files)
+    def self.load(content)
+      data = YAML.load(content)
+      new(
+        data["title"],
+        data["author"],
+        data["files"]
+      )
+    end
+  end
+
+
+  class Generator
+    def initialize(files)
+      @files = files
+    end
+
+    def config
+      @config ||= if File.exists?("config.yml")
+        Config.load(File.read("config.yml"))
+      else
+        Config.new
+      end
+    end
+
+
+    def call
+      build
+    end
+
+    def build
+      # Prepare build dir
+      FileUtils.rm_r "build" if File.exists?("build")
+      FileUtils.mkdir_p "build"
+
+      # Copy assets
+      FileUtils.cp_r ASSETS, File.join("build", "assets")
+
+      # Write html to file
+      html_path = File.expand_path(File.join("build", "page.html"))
+      File.open(html_path, "w") {|f| f.write html }
+
+      # Convert to pdf
+      system "phantomjs #{phantom_script_path} file://#{html_path} #{Shellwords.escape(title)}.pdf A4"
+
+      puts "#{title}.pdf generated"
+    end
+
+    def phantom_script_path
+      File.join(SCRIPTS, "rasterize.js")
+    end
+
+    def files
+      config.files || @files
+    end
+
+    def title
+      config.title || files.first
+    end
+
+    def body
+      require "github/markdown"
+
+      GitHub::Markdown.to_html(content, :markdown) do |code, lang|
+        if lang == "graph"
+          %Q|<div class="mermaid">\n#{code}\n</div>\n|
+        end
+      end
+    end
+
+    def content
+      files.map {|f| File.read(f) }.join
+    end
+
+    def html
+      replacements = {
+        "BODY"    => body,
+        "TITLE"   => title
+      }
+
+      template = File.read(File.join(TEMPLATES, "main.html"))
+
+      replacements.each do |key, value|
+        template.gsub!("[#{key}]", value)
+      end
+
+      template
+    end
+  end
 end

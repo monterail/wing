@@ -2,6 +2,9 @@
 
 Convert github markdown with mermaid diagrams to beautiful PDF
 
+## Requirements
+- PhantomJS
+
 ## Installation
 
 ```bash
@@ -13,13 +16,15 @@ gem install wing
 ### Creating new project
 
 ```bash
+mkdir my-doc
+cd my-doc
 wing init
 ```
 
 ### Generating PDF
 
 ```bash
-wing
+wing gen
 ```
 
 
