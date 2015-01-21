@@ -101,7 +101,7 @@ Usage: wing [init|gen] [OPTIONS] [FILES]
       require "github/markdown"
 
       GitHub::Markdown.to_html(content, :markdown) do |code, lang|
-        if lang == "graph"
+        if lang == "diagram"
           %Q|<div class="mermaid">\n#{code}\n</div>\n|
         end
       end
